@@ -55,6 +55,8 @@ n_distinct(nyc_zips$ZIP) #178 zip codes in nyc
 #setdiff(zips_nyc, zips_mapped) #zipcode = 11695 was not mapped
 
 #attempt at only NYC counties: New York, Kings, Bronx, Richmond, and Queens
+#This causes NAs within the leaflet color range 
+#may need to attempt after geo merge
 counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
 nyc_svi<-ds_svi%>%filter(COUNTY %in% counties_nyc)
 nyc_svi$RPL_THEMES[nyc_svi$RPL_THEMES==-999]<-0
@@ -79,7 +81,7 @@ range(ds_svi$RPL_THEMES)
 ds_merged<-geo_join(tracts, ds_svi, "GEOID", "GEOID")
 range(ds_merged$RPL_THEMES)
 #hover tool options
-popup <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Percentile of Vulnerability: ", ds_merged$RPL_THEMES, "Neighborhood: ", ds_merged$Neighborhood)
+popup <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Percentile of Vulnerability: ", ds_merged$RPL_THEMES,"<br>", "COUNTY: ", ds_merged$COUNTY)
 #color range
 pal <- colorNumeric(
   palette = "YlGnBu",
