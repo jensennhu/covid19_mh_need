@@ -11,6 +11,7 @@ library(sp)
 ds_svi<-read_csv("Social Vulnerability.csv", col_types=cols("FIPS"=col_character()))
 fiptozip<-read.delim("ZIP_TRACT_032020.txt", colClasses = c("character","character","character","character","character","character"))
 nyc_zips<-read_csv("nyc_zips.csv")
+child_opp<-read_csv("ny_child_opp.csv")
 
 #select svi variables
 colnames(ds_svi)
@@ -27,6 +28,11 @@ nyc_zips<-separate_rows(nyc_zips, `ZIP Codes`, convert=FALSE)
 colnames(nyc_zips)[3]<-"ZIP"
 n_distinct(nyc_zips$ZIP) #178 zip codes in nyc
 
+#select child opp variables
+colnames(child_opp)
+y<-c(2,3,6,7,15:18)
+child_opp<-child_opp[y]
+colnames(child_opp)[1]<-"GEOID"
 #Join svi and fiptozip for crosswalk
 #colnames(fiptozip)[2]<-"FIPS"
 #ds_merged<-left_join(ds_svi, fiptozip, by="FIPS")
@@ -53,23 +59,33 @@ n_distinct(nyc_zips$ZIP) #178 zip codes in nyc
 #colnames(nyc_svi)[3]<-"GEOID"
 #range(nyc_svi$RPL_THEMES)
 
+###SOCIAL VULNERABILITY LAYER
 #bring in spatial data on  NY w/Tigris 
 tracts <- tracts(state = 'NY', cb=TRUE)
-
 #values -999 (no data) set to zero
 ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0
 #social vulnerability index to percent
 #ds_svi$RPL_THEMES <- 100*(ds_svi$RPL_THEMES)
-
 #merge svi and spatial ny data to create a enriched spatial dataset
 colnames(ds_svi)[3]<-"GEOID"
 ds_merged<-geo_join(tracts, ds_svi, "GEOID", "GEOID")
 range(ds_merged$RPL_THEMES)
-
 #NYC counties only
 counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
 ds_merged<-ds_merged[ds_merged@data$COUNTY %in% counties_nyc,]
 
+###ZIP CODE LAYER
+#use ZCTAS and nyc zips to create NYC ZIP spatial layer
+test<-zctas(cb=TRUE, starts_with=c("10","11"))
+x<-nyc_zips$ZIP
+test<-test[test@data$ZCTA5CE10 %in% x, ]
+plot(test)
+
+
+##CHILD OPP LAYER
+child_opp$c5_COI_nat<-as.factor(child_opp$c5_COI_nat)
+ordered(child_opp$c5_COI_nat, levels=c("Very Low", "Low", "Moderate", "High", "Very High"))
+merge_opp<-geo_join(tracts, child_opp, "GEOID", "GEOID")
 
 #hover tool options
 popup <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Social Vulnerability Index: ", ds_merged$RPL_THEMES,"<br>", "COUNTY: ", ds_merged$COUNTY)
@@ -78,7 +94,7 @@ pal <- colorNumeric(
   palette = "YlGnBu",
   domain = ds_merged$RPL_THEMES
 )
-#leaflet plot of NY SVI data by TRACT
+#leaflet plot of NYC SVI data by TRACT
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
   addPolygons(data = ds_merged, 
@@ -94,9 +110,35 @@ leaflet() %>%
             title = "Social Vulnerability Index")
             #labFormat = labelFormat(suffix = "%")) 
 
+#leaflet plot of NYC ZIP LAYER
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = test,
+              weight =1,
+              color= "black",
+              fillOpacity = 0.3)
+#labFormat = labelFormat(suffix = "%")) 
 
 
 
-
-
+#color range
+pal <- colorFactor(
+  palette = "YlGnBu",
+  domain = merge_opp$c5_COI_nat
+)
+#leaflet plot of NYC CHILD OPP data by TRACT
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = merge_opp, 
+              fillColor = ~pal(c5_COI_nat), 
+              color = "#b2aeae", # you need to use hex colors
+              fillOpacity = 0.7, 
+              weight = 1, 
+              smoothFactor = 0.2,
+              popup = popup) %>%
+  addLegend(pal = pal, 
+            values = merge_opp$c5_COI_nat, 
+            position = "bottomright", 
+            title = "Child Opp")
+#labFormat = labelFormat(suffix = "%")) 
 
