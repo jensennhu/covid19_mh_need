@@ -1,13 +1,3 @@
-install.packages("sf")
-install.packages("rnaturalearth")
-install.packages("rnaturalearthdata")
-install.packages("ggmap")
-install.packages("tmap")
-install.packages("maptools")
-install.packages("tigris")
-install.packages("leaflet")
-install.packages("geo_join")
-install.packages("sp")
 library(leaflet)
 library(xlsx)
 library(readr)
@@ -57,31 +47,32 @@ n_distinct(nyc_zips$ZIP) #178 zip codes in nyc
 #attempt at only NYC counties: New York, Kings, Bronx, Richmond, and Queens
 #This causes NAs within the leaflet color range 
 #may need to attempt after geo merge
-counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
-nyc_svi<-ds_svi%>%filter(COUNTY %in% counties_nyc)
-nyc_svi$RPL_THEMES[nyc_svi$RPL_THEMES==-999]<-0
-range(nyc_svi$RPL_THEMES)
-glimpse(nyc_svi)
+#counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
+#nyc_svi<-ds_svi%>%filter(COUNTY %in% counties_nyc)
+#nyc_svi$RPL_THEMES[nyc_svi$RPL_THEMES==-999]<-0
+#colnames(nyc_svi)[3]<-"GEOID"
+#range(nyc_svi$RPL_THEMES)
 
 #bring in spatial data on  NY w/Tigris 
 tracts <- tracts(state = 'NY', cb=TRUE)
-names(nyc_svi)[3]<-"GEOID"
-#social vulnerability index to percent
-nyc_svi$RPL_THEMES <- 100*(nyc_svi$RPL_THEMES)
 
-
-#sequence for ALL counties in NY
-names(ds_svi)[3]<-"GEOID"
+#values -999 (no data) set to zero
 ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0
-ds_svi$RPL_THEMES <- 100*(ds_svi$RPL_THEMES)
-range(ds_svi$RPL_THEMES)
-
+#social vulnerability index to percent
+#ds_svi$RPL_THEMES <- 100*(ds_svi$RPL_THEMES)
 
 #merge svi and spatial ny data to create a enriched spatial dataset
+colnames(ds_svi)[3]<-"GEOID"
 ds_merged<-geo_join(tracts, ds_svi, "GEOID", "GEOID")
 range(ds_merged$RPL_THEMES)
+
+#NYC counties only
+counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
+ds_merged<-ds_merged[ds_merged@data$COUNTY %in% counties_nyc,]
+
+
 #hover tool options
-popup <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Percentile of Vulnerability: ", ds_merged$RPL_THEMES,"<br>", "COUNTY: ", ds_merged$COUNTY)
+popup <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Social Vulnerability Index: ", ds_merged$RPL_THEMES,"<br>", "COUNTY: ", ds_merged$COUNTY)
 #color range
 pal <- colorNumeric(
   palette = "YlGnBu",
@@ -100,8 +91,8 @@ leaflet() %>%
   addLegend(pal = pal, 
             values = ds_merged$RPL_THEMES, 
             position = "bottomright", 
-            title = "Percentile of Vulnerability",
-            labFormat = labelFormat(suffix = "%")) 
+            title = "Social Vulnerability Index")
+            #labFormat = labelFormat(suffix = "%")) 
 
 
 
