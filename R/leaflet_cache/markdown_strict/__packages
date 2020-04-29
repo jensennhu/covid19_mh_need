@@ -1,0 +1,15 @@
+base
+webshot
+leaflet
+readr
+dplyr
+tidyverse
+ggplot2
+tibble
+tidyr
+purrr
+stringr
+forcats
+tigris
+sp
+htmlwidgets

@@ -1,0 +1,81 @@
+---
+title: "Assessment of Social Vulnerability in New York City During COVID-19"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE, cache=TRUE}
+library(flexdashboard)
+library(leaflet)
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(tigris)
+library(sp)
+library(htmlwidgets)
+
+#read data 
+ds_svi<-read_csv("../RawData/Social Vulnerability.csv", col_types=cols("FIPS"=col_character()))
+nyc_zips<-read_csv("../RawData/nyc_zips.csv")
+child_opp<-read_csv("../RawData/ny_child_opp.csv")
+
+##SVI DATA CLEAN/TRANSFORM
+#select svi variables
+col_svi<-c("STCNTY","COUNTY","FIPS","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4","RPL_THEMES")
+ds_svi<-ds_svi[col_svi]
+
+#bring in spatial data on  NY w/Tigris 
+options(tigris_use_cache = TRUE)
+tracts <- tracts(state = 'NY', cb=TRUE)
+
+#values -999 (no data) set to zero
+ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0
+
+#merge svi and spatial ny data to create a enriched spatial dataset
+colnames(ds_svi)[3]<-"GEOID"
+ds_merged<-geo_join(tracts, ds_svi, "GEOID", "GEOID")
+range(ds_merged$RPL_THEMES)
+
+#NYC counties only
+counties_nyc<-c("New York", "Kings", "Bronx", "Richmond", "Queens")
+ds_merged<-ds_merged[ds_merged@data$COUNTY %in% counties_nyc,]
+
+
+```
+
+
+### Chart A
+
+```{r}
+##LEAFLET PLOTTING
+#hover tools 
+popup1 <- paste0("GEOID: ", ds_merged$GEOID, "<br>", "Social Vulnerability Index: ", ds_merged$RPL_THEMES,"<br>", "COUNTY: ", ds_merged$COUNTY)
+
+#color ranges
+pal1 <- colorNumeric(
+  palette = "YlGnBu",
+  domain = ds_merged$RPL_THEMES)
+
+##leaflet plot of NYC SVI data by TRACT
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = ds_merged, 
+              fillColor = ~pal1(RPL_THEMES), 
+              color = "#b2aeae", # you need to use hex colors
+              fillOpacity = 0.7, 
+              weight = 1, 
+              smoothFactor = 0.2,
+              popup = popup1) %>%
+  setView(lng =-73.935242,
+          lat = 40.730610, 
+          zoom = 11,
+          options = list(setZoom=2))%>%
+  addLegend(pal = pal1, 
+            values = ds_merged$RPL_THEMES, 
+            position = "bottomright", 
+            title = "Social Vulnerability Index")
+            #labFormat = labelFormat(suffix = "%")) 
+
+```
