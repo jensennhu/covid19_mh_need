@@ -226,4 +226,4 @@ dat %>% # stacked bar chart
 ```
 
 ***
-The following is a stacked bar chart of the proportion of each of the SVI categories by County. This shows the same story as the scatter plot but in proportions. 
+The following is a stacked bar chart of the proportion of each of the SVI categories by County. This shows the same story as the scatter plot but in proportions . 
