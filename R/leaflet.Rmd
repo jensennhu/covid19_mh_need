@@ -1,23 +1,26 @@
 ---
 title: "Assessment of Mental Health Need Before, During, and After COVID-19"
 author: "Jensen Hu"
-always_allow_html: yes
 output:
-  
+  html_document: default
+  always_allow_html: yes
 ---
 ## Purpose
 The purpose of this assessment is to identify areas of potentially increased mental health need as a result of COVID-19 in NYC. The resulting aim is to route public health efforts and mental health resources to those identified areas of highest need.
 
 ```{r, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, error=TRUE)
+knitr::opts_chunk$set(echo = FALSE, error=TRUE, message=FALSE, cache = TRUE)
 # Load packages
 library(readr) # input/output
 library(dplyr) # data manipulation
+library(reshape)
 library(tidyverse) # data manipulation
 library(tigris) # geospatial data
 library(sp) # visualization
 library(htmlwidgets) # visualization
 library(leaflet) # visualization
+library(ggplot2) # visualization
+
 
 # Load data 
 ds_svi <- read_csv("../RawData/Social Vulnerability.csv", col_types=cols("FIPS"=col_character()))
@@ -36,25 +39,19 @@ covid_boro <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-
 
 #### **Exploration of Social Vulnerability Index (SVI)**
 
-```{r, cache=TRUE, echo=FALSE}
-# select relevant svi variables
-col_svi <- c("STCNTY","COUNTY","FIPS","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4","RPL_THEMES")
-ds_svi <- ds_svi[col_svi]
-# bring in NYS census tract spatial data
-options(tigris_use_cache = TRUE)
-tracts <- tracts(state = 'NY', cb=TRUE)
-# merge svi and spatial ny data to create a enriched spatial dataset
-svi_tracts <- geo_join(tracts, ds_svi, "GEOID", "FIPS")
-# nyc counties only
-counties_nyc <- c("New York", "Kings", "Bronx", "Richmond", "Queens")
-svi_tracts <- svi_tracts[svi_tracts@data$COUNTY %in% counties_nyc,]
-```
+SVI consists of 15 census variables organized into 4 different themes:  
 
-SVI consists of 15 census variables organized into 4 different themes: Socioeconomic Status (RPL_THEME1), Household Composition & Disability (RPL_THEME2), Minority Status & Language (RPL_THEME3), Housing & Transportation (RPL_THEME4) and an overall summary (RPL_THEMES). These themes are measured in percentile rank. A higher percentile rank represents greater vulnerability, with a percentile rank of 0.00 meaning the least vulnerable and 1.00 meaning the most vulnerable. Reference:https://svi.cdc.gov/Documents/Data/2016_SVI_Data/SVI2016Documentation.pdf 
+*  Socioeconomic Status (**RPL_THEME1**),   
+*  Household Composition & Disability (**RPL_THEME2**),  
+*  Minority Status & Language (**RPL_THEME3**),   
+*  Housing & Transportation (**RPL_THEME4**) and, 
+*  In Summary, an overall Social Vulnerabilities Index (**RPL_THEMES**).  
+
+These themes are measured in percentile rank. A higher percentile rank represents greater vulnerability, with a percentile rank of 0.00 meaning the least vulnerable and 1.00 meaning the most vulnerable. Reference:https://svi.cdc.gov/Documents/Data/2016_SVI_Data/SVI2016Documentation.pdf 
 
 These rankings have been alloted by census tract (GEOID)-- "uniquely numbered subdivisions of a county, representing a neighborhood averaging about 4,000 inhabitants." NYC has 5 different counties ("New York", "Kings", "Bronx", "Richmond", "Queens") which have been subdivided into 2,166 census tracts. To provide a frame of reference, census tracts are more granular than zip codes. There are 178 zip codes in NYC.
 
-To begin, we will review SVI data by NY county.
+To begin, we will review SVI data by NYC county.
 
 ##### **Review of SVI Data by NYC County**
 
@@ -66,22 +63,20 @@ svi_county<-ds_county_svi%>%filter(FIPS %in% nyc_cfips)
 knitr::kable(svi_county[c(4:6, 79,85, 89, 96, 98)], format="markdown")
 ```
 
-At a glance, the Bronx county has the highest overall social vulnerability (RPL_THEMES=1.000) followed by Kings county (RPL_THEMES=0.918). This seems to indicate that these two counties are likely to be substantially impacted by COVID19 and need priority allocation of emergency resources. 
-
 ##### **Mapping SVI data by County**
-```{r, echo=FALSE, cache=TRUE}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # bring in NYS county spatial data
-county_sp<-counties(state="NY")
+options(tigris_use_cache = TRUE)
+county_sp <- counties(state="NY")
 # nyc county fips only
-county_sp<-county_sp[county_sp@data$GEOID %in% nyc_cfips,]
+county_sp <- county_sp[county_sp@data$GEOID %in% nyc_cfips,]
 # svi data merged w/county spatial data
-county_merged<-geo_join(county_sp, svi_county, "GEOID", "FIPS")
+county_merged <- geo_join(county_sp, svi_county, "GEOID", "FIPS")
 # pop up
 popup <- paste0("County: ", county_merged$COUNTY, "<br>", "SVI: ", county_merged$RPL_THEMES)
 # color ranges
-pal <- colorNumeric(
-  palette = "BuGn",
-  domain = county_merged$RPL_THEMES)
+pal <- colorNumeric(palette = "BuGn", domain = county_merged$RPL_THEMES)
 # leaflet plot of NYC SVI data by COUNTY
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -97,17 +92,18 @@ leaflet() %>%
             position = "bottomright", 
             title = "Social Vulnerability Index")
 ```
+At a glance, the Bronx county has the highest overall social vulnerability (RPL_THEMES=1.000) followed by Kings county (RPL_THEMES=0.918) within the counties in NYC. This seems to indicate that these two counties are likely to be substantially impacted by COVID19 and would need priority allocation of emergency resources. Arguably, the ranking of least to most socially vulnerable aligns with mental health need within the counties.   
 
 Now, let's take a look at how COVID19 has impacted NYC counties to date:
 
-```{r, echo=FALSE, cache=TRUE}
-#
+```{r, echo=FALSE, cache=TRUE, message=FALSE, warning=FALSE}
+# 
 covid_boro<-read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/boro.csv")
 covid_boro<-covid_boro%>%mutate(COUNTY=ifelse(BOROUGH_GROUP=='The Bronx','Bronx', ifelse(BOROUGH_GROUP=='Brooklyn','Kings', ifelse(BOROUGH_GROUP=='Manhattan','New York', ifelse(BOROUGH_GROUP=='Queens', 'Queens', ifelse(BOROUGH_GROUP=='Staten Island','Richmond', 'NA')))))) 
-knitr::kable(cc, format="markdown")
+knitr::kable(covid_boro[c(4,1,2,3)], format="markdown")
 ```
 
-The above contains cumulative, age adjusted rates of confirmed cases per 100,000 people, by NYC borough of residence. We can see that The Bronx (Bronx County) and Staten Island (Richmond County) have higher COVID case rates in relation to all other counties. Assuming COVID case rate is an indicator of COVID impact, let's add in COVID data into the current SVI rankings. 
+The above contains cumulative, age adjusted rates of confirmed cases per 100,000 people, by NYC borough of residence. We can see that The Bronx (Bronx County) and Staten Island (Richmond County) have higher COVID case rates in relation to all other counties. Assuming COVID case rate is an indicator of "COVID impact", let's incorporate this data into the current SVI rankings. 
 
 Note: I don't think it's this easy.
 
@@ -123,12 +119,13 @@ svi_cc<-svi_cc%>%mutate(covid_rank=percent_rank(COVID_CASE_RATE))
 svi_cc$adj_SPL<-svi_cc$SPL_THEMES + svi_cc$covid_rank
 # percent rank adjusted SPL
 svi_cc<-svi_cc%>%mutate(svi_covid_rank=percent_rank(adj_SPL))
-colnames(svi_cc)
 
 knitr::kable(svi_cc[c(1,10, 8, 12:15)], format="markdown")
 ```
 
-Based on the new "svi_covid_rank", we can see that Bronx and Kings county still hold their rank as the highest in social vulnerability in the context of COVID. 
+-	To do this, the case rate was percent ranked by county then added that to the SVI's raw score -- SPL_THEMES and then a second percent rank on that “adjusted SPL THEMES” was performed to give a COVID SVI percent rank. 
+
+Based on the new "svi_covid_rank", we can see that Bronx and Kings county still hold their rank as the highest in social vulnerability in the context of COVID.
 
 ##### **Mapping COVID adjusted SVI data by County**
 
@@ -158,6 +155,91 @@ leaflet() %>%
 
 ```
 
+Now that we have an idea of how social vulnerability may affect the impact of a pandemic, let's , assessing by the census tract level should prove to be more imformative in understanding mental health need within NYC. 
+
+##### Review of SVI by Census Tract
+As mentioned above, each county is subdivided by census tracts. 
+Number of census tracts by county:
+```{r, echo=FALSE}
+# select relevant svi variables
+col_svi <- c("STCNTY","COUNTY", "LOCATION", "FIPS","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4","RPL_THEMES")
+ds_svi <- ds_svi[col_svi]
+ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0
+# nyc counties only
+counties_nyc <- c("New York", "Kings", "Bronx", "Richmond", "Queens")
+ds_svi <- ds_svi %>% filter(COUNTY %in% counties_nyc)
+
+ds_svi %>% 
+  group_by(COUNTY) %>% 
+  summarize(Census_Tracts=n()) %>% 
+  arrange(desc(Census_Tracts)) %>% 
+  knitr::kable(format="markdown")
+```
+
+##### Scatter plot of Overall Percentile ranks of each Census Tract by County
+
+```{r, echo=FALSE}
+ds_svi %>% 
+  ggplot(aes(x=LOCATION, y=RPL_THEMES)) + 
+  geom_point(alpha=0.4) +
+  facet_grid(~ COUNTY)
+```
+
+##### Overall SVI Rank to Quantile Categories
+The overall ranked vulnerability is measured from 0 to 1. In order to provide a bit more practical use out of this measure, we'll categorize by quantiles. 
+
+```{r, echo=FALSE}
+quantile(ds_svi$RPL_THEMES)
+# 0%     25%     50%     75%    100% 
+# 0.00000 0.39635 0.65910 0.84460 1.00000 
+```
+Values from 0.84460 to 1 will be considered as "Highest Vulnerability"
+Values from 0.65910 to 0.84460 will be considered as "High Medium Vulnerability"
+Values from 0.39635 to 0.65910 will be considered as "Low Middle Vulnerability"
+Values from 0.000 to 0.39635 will be considered as "Lowest Vulnerability"
+
+##### Number of Census Tracts ranked by Social Vulnerability Cat by County
+
+```{r, echo=FALSE}
+ds_svi <- ds_svi %>% 
+  mutate(cat = case_when(
+    RPL_THEMES >= 0.84460 ~ "Highest Vulnerability",
+    RPL_THEMES >= 0.65910 & RPL_THEMES < 0.84460 ~ "High Medium Vulnerability",
+    RPL_THEMES >= 0.39635 & RPL_THEMES < 0.65910 ~ "Low Medium Vulnerability",
+    RPL_THEMES >= 0.000 & RPL_THEMES < 0.39635 ~ "Lowest Vulnerability"
+  ))
+
+# order levels of svi cat
+ds_svi$cat <- ordered(ds_svi$cat, levels = c("Lowest Vulnerability", "Low Medium Vulnerability", "High Medium Vulnerability", "Highest Vulnerability"))
+
+ds_svi %>% 
+  group_by(COUNTY, cat) %>% 
+  summarize(count=n()) %>% 
+  cast(COUNTY ~ cat) %>% 
+  knitr::kable(format="markdown")
+```
+
+##### Scatter plot of Overall Percentile ranks of each Census Tract by County & Social Vulnerability Cat
+
+```{r, echo=FALSE}
+ds_svi %>% 
+  ggplot(aes(x=LOCATION, y=RPL_THEMES)) + 
+  geom_point(alpha=0.5, aes(col=cat)) +
+  facet_grid(~ COUNTY)
+```
+
+```{r, echo=FALSE}
+# bring in NYS census tract spatial data
+options(tigris_use_cache = TRUE)
+tracts <- tracts(state = 'NY', cb=TRUE)
+
+# merge svi and spatial ny data to create a enriched spatial dataset
+svi_tracts <- geo_join(tracts, ds_svi, "GEOID", "FIPS")
+# nyc counties only
+counties_nyc <- c("New York", "Kings", "Bronx", "Richmond", "Queens")
+svi_tracts <- svi_tracts[svi_tracts@data$COUNTY %in% counties_nyc,]
+```
+
 #### ZIP CODE CLEAN/TRANSFORM #178 zip codes in nyc
 
 ```{r, echo=FALSE}
@@ -171,9 +253,12 @@ x<-nyc_zips$ZIP
 nyc_zips<-zctas_ny[zctas_ny@data$ZCTA5CE10 %in% x, ]
 # NYC ZIP SPATIAL+ COVID-19 Data
 nyc_covid<-geo_join(nyc_zips, covid, "ZCTA5CE10", "MODZCTA")
+
 ```
 
-```{r, echo=FALSE, eval=FALSE}
+#### Child Opportunity Index (COI)
+
+```{r, echo=FALSE}
 ## select child opp variables
 y<-c(2,3,6,7,15:18)
 child_opp<-child_opp[y]
@@ -187,131 +272,84 @@ merge_opp<-geo_join(tracts, child_opp, "GEOID", "GEOID")
 merge_opp<-merge_opp[merge_opp@data$countyfips %in% nyc_cfips,]
 ```
 
+### Interactive Leaflet - COVID19 % Positive by Zip & SVI and COI by Census Tract
 
-#### Leaflet#1 - SVI by Census Tract
-
-```{r , echo=FALSE}
-# popup
-popup1 <- paste0("GEOID: ", svi_tracts$GEOID, "<br>", "Social Vulnerability Index: ", svi_tracts$RPL_THEMES,"<br>", "COUNTY: ", svi_tracts$COUNTY)
-# pal
-pal1 <- colorNumeric(
-  palette = "YlGnBu",
-  domain = svi_tracts$RPL_THEMES)
-## leaflet plot of NYC SVI data by TRACT
-leaflet() %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(data = svi_tracts, 
-              fillColor = ~pal1(RPL_THEMES), 
-              color = "#b2aeae", # you need to use hex colors
-              fillOpacity = 0.7, 
-              weight = 1, 
-              smoothFactor = 0.2,
-              popup = popup1) %>%
-  addLegend(pal = pal1, 
-            values = svi_tracts$RPL_THEMES, 
-            position = "bottomright", 
-            title = "Social Vulnerability Index")
-            #labFormat = labelFormat(suffix = "%")) 
-```
-
-#### Leaflet#2 - NYC ZIPS
 ```{r, echo=FALSE}
-# leaflet plot of NYC ZIP LAYER
-leaflet() %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(data = nyc_zips,
-              weight =1,
-              color= "black",
-              fillOpacity = 0.1)
-```
-#### Leaflet#3 - NYC ZIPS + COVID19 % Positive
-```{r, echo=FALSE}
-# hover tools 
-popup3 <- paste0("Zip Code: ", nyc_covid$ZCTA5CE10, "<br>", "Percent Positive Cases: ", nyc_covid$zcta_cum.perc_pos)
-# color ranges
-pal3 <- colorNumeric(
-  palette = "YlGnBu",
-  domain= nyc_covid$zcta_cum.perc_pos)
-# NYC ZIPS + COVID19 % Positive
-leaflet() %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(data = nyc_covid,
-              fillColor = ~pal3(zcta_cum.perc_pos),
+# Layer 1 - COVID by ZIP options
+popup1 <- paste0("Zip Code: ", nyc_covid$ZCTA5CE10, "<br>", "Percent Positive Cases: ", nyc_covid$zcta_cum.perc_pos)
+pal1 <- colorNumeric(palette = "YlGnBu", domain= nyc_covid$zcta_cum.perc_pos)
+# Layer 2 - SVI by Census Tract options
+popup2 <- paste0("GEOID: ", svi_tracts$GEOID, "<br>", "Social Vulnerability Index: ", svi_tracts$RPL_THEMES,"<br>", "COUNTY: ", svi_tracts$COUNTY)
+pal2 <- colorFactor(palette = "YlGnBu", domain = svi_tracts$cat)
+# Layer 3 - Child Opportunity Index
+popup3 <- paste0("GEOID: ", merge_opp$GEOID, "<br>", "Child Opportunity Level: ", merge_opp$c5_COI_nat,"<br>", "COUNTY: ", merge_opp$msaname15)
+pal3 <- colorFactor(palette = "YlGnBu", domain = merge_opp$c5_COI_nat, reverse = TRUE)
+
+p <- leaflet() %>%
+  # Base Groups
+  addProviderTiles("CartoDB.Positron", group = "Positron") %>%  
+  addTiles(group = "default") %>%  
+  addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
+  # Overlay Groups
+  addPolygons(data = nyc_covid,  # NYC ZIPS + COVID19 % Positive
+              fillColor = ~pal1(zcta_cum.perc_pos),
               weight =2,
               color = "black",
               fillOpacity = 0.7,
-              popup = popup3)%>%
-    addLegend(pal = pal3, 
-            values = nyc_covid$zcta_cum.perc_pos, 
-            position = "bottomright", 
-            title = "Percent Positive",
-            labFormat = labelFormat(suffix = "%")) 
-```
-#### Leaflet#4 - NYC CHILD OPP
-```{r , echo=FALSE}
-##LEAFLET PLOTTING
-#hover tools 
-popup2 <- paste0("GEOID: ", merge_opp$GEOID, "<br>", "Child Opportunity Level: ", merge_opp$c5_COI_nat,"<br>", "COUNTY: ", merge_opp$msaname15)
-#color ranges
-pal2 <- colorFactor(
-  palette = "YlGnBu",
-  domain = merge_opp$c5_COI_nat,
-  reverse = TRUE)
-#leaflet plot of NYC CHILD OPP data by TRACT
-leaflet() %>%
-  addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(data = merge_opp, 
-              fillColor = ~pal2(c5_COI_nat), 
-              color = "#b2aeae", # you need to use hex colors
+              popup = popup1,
+              group = "COVID19 % Positive") %>%
+  addPolygons(data = svi_tracts, # SVI by Census Tracts
+              fillColor = ~pal2(cat), 
+              color = "black", 
               fillOpacity = 0.7, 
               weight = 1, 
               smoothFactor = 0.2,
-              popup = popup2) %>%
-  addLegend(pal = pal2, 
-            values = merge_opp$c5_COI_nat, 
-            position = "bottomright", 
-            title = "Child Opp")
-#labFormat = labelFormat(suffix = "%")) 
-```
-#### Leaflet#5 - SVI by Census Tract + ZCTAS (ZIP) Overlay
-```{r , echo=FALSE}
-##LEAFLET PLOTTING
-#hover tools 
-popup1 <- paste0("GEOID: ", svi_tracts$GEOID, "<br>", "Social Vulnerability Index: ", svi_tracts$RPL_THEMES,"<br>", "COUNTY: ", svi_tracts$COUNTY)
-
-#color ranges
-pal1 <- colorNumeric(
-  palette = "YlGnBu",
-  domain = svi_tracts$RPL_THEMES)
-
-#Attempted combination
-#leaflet plot of NYC CHILD OPP data by TRACT
-leaflet() %>%
-  addProviderTiles("CartoDB.Positron") %>%
-#  addPolygons(data = merge_opp, 
-#              fillColor = ~pal2(c5_COI_nat), 
-#              color = "#b2aeae", # you need to use hex colors
-#              fillOpacity = 0.9, 
-#              weight = 1, 
-#              smoothFactor = 0.2,
-#              popup = popup2) %>%
-  addPolygons(data = svi_tracts, 
-              fillColor = ~pal1(RPL_THEMES), 
-              color = "#b2aeae", # you need to use hex colors
-              fillOpacity = 0.9, 
+              popup = popup2, 
+              group = "Social Vulnerability Index") %>%
+  addPolygons(data = merge_opp, # Child Opportunity Index by Census Tracts
+              fillColor = ~pal3(c5_COI_nat), 
+              color = "#b2aeae", 
+              fillOpacity = 0.7, 
               weight = 1, 
               smoothFactor = 0.2,
-              popup = popup1) %>%
-  addPolygons(data = nyc_zips,
-              weight =1,
+              popup = popup3,
+              group = "Child Opportunity Index") %>%
+  addPolygons(data = nyc_zips, # NYC Zip Codes
+              weight =2,
               color= "black",
-              fillOpacity = 0.1)%>%
-#  addLegend(pal = pal2, 
-#            values = merge_opp$c5_COI_nat, 
-#            position = "bottomright", 
-#            title = "Child Opp")%>%
+              fillOpacity = 0,
+              group = "zips") %>%
+  addPolygons(data = county_sp, # NY County Boundaries
+              color = "black", 
+              fillOpacity = 0, 
+              weight = 2,
+              group = "county") %>%
+ # Layers control
+  addLayersControl(
+    baseGroups = c("Positron", "default", "Toner Lite"),
+    overlayGroups = c("COVID19 % Positive", "Social Vulnerability Index", "Child Opportunity Index", "zips", "county"),
+    options = layersControlOptions(collapsed = FALSE)
+  )  %>%
   addLegend(pal = pal1, 
-            values = svi_tracts$RPL_THEMES, 
+            values = nyc_covid$zcta_cum.perc_pos, 
             position = "bottomleft", 
-            title = "SVI")
+            title = "Percent Positive",
+            labFormat = labelFormat(suffix = "%"),
+            group = "COVID19 % Positive") %>% 
+  addLegend(pal = pal2, 
+            values = svi_tracts$cat, 
+            position = "bottomright", 
+            title = "Social Vulnerability Index",
+            group = "Social Vulnerability Index") %>%
+  addLegend(pal = pal3, 
+            values = merge_opp$c5_COI_nat, 
+            position = "topright", 
+            title = "Child Opp",
+            group = "Child Opportunity Index") %>% 
+  hideGroup(c("COVID19 % Positive", "Social Vulnerability Index", "Child Opportunity Index", "zips", "county"))
+
+p
 ```
+
+
+

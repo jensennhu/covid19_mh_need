@@ -1,10 +1,4 @@
 base
-methods
-datasets
-utils
-grDevices
-graphics
-stats
 sp
 flexdashboard
 leaflet
@@ -19,3 +13,6 @@ stringr
 forcats
 tigris
 htmlwidgets
+reshape
+dygraphs
+rmarkdown

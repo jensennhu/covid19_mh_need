@@ -1,7 +1,7 @@
 base
-leaflet
 readr
 dplyr
+reshape
 tidyverse
 ggplot2
 tibble
@@ -12,3 +12,4 @@ forcats
 tigris
 sp
 htmlwidgets
+leaflet
