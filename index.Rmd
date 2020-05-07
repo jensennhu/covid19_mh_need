@@ -224,6 +224,13 @@ dat %>% # stacked bar chart
     geom_bar(position = "fill",stat = "identity") +
     scale_y_continuous(labels = scales::percent_format())
 ```
+```{r, echo=FALSE}
+dat %>% # stacked bar chart 
+  mutate(value=as.numeric(value)) %>% 
+  ggplot(aes(x = Counties, y = value, fill = variable)) + 
+    geom_bar(position = "fill",stat = "identity") +
+    scale_y_continuous(labels = scales::percent_format())
+```
 
 ***
 The following is a stacked bar chart of the proportion of each of the SVI categories by County. This shows the same story as the scatter plot but in proportions . 
