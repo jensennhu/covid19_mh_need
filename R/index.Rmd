@@ -24,70 +24,52 @@ library(ggpubr) # visualization
 
 # Load data 
 ds_svi <- read_csv("../RawData/Social Vulnerability.csv", col_types=cols("FIPS"=col_character()))
-ds_county_svi <- read_csv("../RawData/svi_ny_county.csv", col_types=cols("FIPS"=col_character()))
 nyc_zips <- read_csv("../RawData/nyc_zips.csv")
 child_opp <- read_csv("../RawData/ny_child_opp.csv")
 covid <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/tests-by-zcta.csv")
-covid_boro <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/boro.csv")
 roster <- read_csv("../RawData/Schools Roster.csv")
 schools <- read.socrata("https://data.cityofnewyork.us/resource/wg9x-4ke6.json")
-# NYS county spatial data
+# tigris NYS county spatial data
 options(tigris_use_cache = TRUE)
 county_sp <- counties(state="NY")
-# NYS census tract spatial data
-tracts <- tracts(state = 'NY', cb=TRUE)
-# NY + NJ zip spatial data
-zctas_ny<-zctas(cb=TRUE, starts_with=c("10","11"))
-
-# creating the nyc county spatial
-nyc_cfips<-c("36005", "36047","36061", "36085", "36081" )
-svi_county<-ds_county_svi%>%filter(FIPS %in% nyc_cfips)
+nyc_cfips <- c("36005", "36047","36061", "36085", "36081" )
 county_sp <- county_sp[county_sp@data$GEOID %in% nyc_cfips,] # nyc county fips only
-
-# borough to county
-covid_boro<-covid_boro%>%mutate(COUNTY=ifelse(BOROUGH_GROUP=='The Bronx','Bronx', ifelse(BOROUGH_GROUP=='Brooklyn','Kings', ifelse(BOROUGH_GROUP=='Manhattan','New York', ifelse(BOROUGH_GROUP=='Queens', 'Queens', ifelse(BOROUGH_GROUP=='Staten Island','Richmond', 'NA')))))) 
-
+# tigris NYS census tract spatial data
+tracts <- tracts(state = 'NY', cb=TRUE)
+# tigris NY + NJ zctas spatial data
+zctas_ny <- zctas(cb=TRUE, starts_with=c("10","11"))
 
 # creating svi by census tract spatial
-col_svi <- c("STCNTY","COUNTY", "LOCATION", "FIPS","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4","RPL_THEMES") # select relevant svi variables
+col_svi <- c("STCNTY","COUNTY", "LOCATION", "FIPS", "RPL_THEME1", "RPL_THEME2", "RPL_THEME3", "RPL_THEME4", "RPL_THEMES")
 ds_svi <- ds_svi[col_svi]
-ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0
-
-
-counties_nyc <- c("New York", "Kings", "Bronx", "Richmond", "Queens") # nyc counties only
+ds_svi$RPL_THEMES[ds_svi$RPL_THEMES==-999]<-0 # missing values set to zero 
 ds_svi <- ds_svi %>% # assigning vulnerability cat based on quantiles
-  filter(COUNTY %in% counties_nyc) %>% 
+  filter(STCNTY %in% nyc_cfips) %>% 
   mutate(cat = case_when(
     RPL_THEMES >= 0.84460 ~ "Highest Vulnerability",
     RPL_THEMES >= 0.65910 & RPL_THEMES < 0.84460 ~ "High Medium Vulnerability",
     RPL_THEMES >= 0.39635 & RPL_THEMES < 0.65910 ~ "Low Medium Vulnerability",
     RPL_THEMES >= 0.000 & RPL_THEMES < 0.39635 ~ "Lowest Vulnerability"
   ))
-
 ds_svi$cat <- ordered(ds_svi$cat, levels = c("Lowest Vulnerability", "Low Medium Vulnerability", "High Medium Vulnerability", "Highest Vulnerability")) # order levels of svi cat
-
-
-svi_tracts <- geo_join(tracts, ds_svi, "GEOID", "FIPS")
-svi_tracts <- svi_tracts[svi_tracts@data$COUNTY %in% counties_nyc,] # nyc counties only
-
+svi_tracts <- geo_join(tracts, ds_svi, "GEOID", "FIPS") # enrich tigris w/svi 
+svi_tracts <- svi_tracts[svi_tracts@data$STCNTY %in% nyc_cfips,] # nyc counties only
 
 # creating covid by zip spatial 
-nyc_zips<-separate_rows(nyc_zips, `ZIP Codes`, convert=FALSE)# separate csv into individual rows
+nyc_zips <- separate_rows(nyc_zips, `ZIP Codes`, convert=FALSE)# separate csv into individual rows
 colnames(nyc_zips)[3]<-"ZIP"
-x<-nyc_zips$ZIP
-nyc_zips<-zctas_ny[zctas_ny@data$ZCTA5CE10 %in% x, ] # nyc zips only
-nyc_covid<-geo_join(nyc_zips, covid, "ZCTA5CE10", "MODZCTA")
-
+x <- nyc_zips$ZIP
+nyc_zips <- zctas_ny[zctas_ny@data$ZCTA5CE10 %in% x, ] # nyc zips only
+nyc_covid <- geo_join(nyc_zips, covid, "ZCTA5CE10", "MODZCTA")
 
 # creating child opportunity index spatial
-y<-c(2,3,6,7,15:18) # select variables
-child_opp<-child_opp[y]
-colnames(child_opp)[1]<-"GEOID" 
-child_opp$c5_COI_nat<-as.factor(child_opp$c5_COI_nat) 
-child_opp$c5_COI_nat<-ordered(child_opp$c5_COI_nat, levels=c("Very Low", "Low", "Moderate", "High", "Very High")) # set factor order in plot value
-merge_opp<-geo_join(tracts, child_opp, "GEOID", "GEOID")
-merge_opp<-merge_opp[merge_opp@data$countyfips %in% nyc_cfips,] # only NYC County FIPS
-
+y <- c(2,3,6,7,15:18) # select variables
+child_opp <- child_opp[y]
+colnames(child_opp)[1] <- "GEOID" 
+child_opp$c5_COI_nat <- as.factor(child_opp$c5_COI_nat) 
+child_opp$c5_COI_nat <- ordered(child_opp$c5_COI_nat, levels=c("Very Low", "Low", "Moderate", "High", "Very High")) # set factor order in plot value
+merge_opp <- geo_join(tracts, child_opp, "GEOID", "GEOID")
+merge_opp <- merge_opp[merge_opp@data$countyfips %in% nyc_cfips,] # only NYC County FIPS
 
 # lat lng convert to numeric
 schools$longitude <- as.numeric(schools$longitude)
@@ -111,27 +93,25 @@ pal3 <- colorFactor(palette = "YlGnBu", domain = merge_opp$c5_COI_nat, reverse =
 popup4 <- paste0("School Name: ", schools$location_name, "<br>","DBN: ", schools$system_code, "<br>","Address: ", schools$primary_address_line_1)
 
 # Label Text
-labels <- sprintf(
+labels1 <- sprintf( # label for covid by zip code
   "<strong>Zip code: %s</strong><br/> Perc. Positive: %g",
   nyc_covid$ZCTA5CE10, nyc_covid$zcta_cum.perc_pos
 ) %>% lapply(htmltools::HTML)
-labels2 <- sprintf(
+labels2 <- sprintf( # label for zip codes
   "<strong>Zip code: %s</strong>",
   nyc_zips$ZCTA5CE10) %>% lapply(htmltools::HTML)
-labels3 <- sprintf(
+labels3 <- sprintf( # label for county names
   "<strong>County: %s</strong>",
   county_sp$NAME) %>% lapply(htmltools::HTML)
-labels4 <- sprintf(
+labels4 <- sprintf( # label for school names
   "<strong>School Name: %s</strong>",
   schools$location_name) %>% lapply(htmltools::HTML)
 
-
-# Add Labels
+# label parameters
 label_Options <- labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"), textsize = "15px", direction = "auto")
-# Add highlights
+# highlight parameters
 highlight_Options <- highlightOptions(color = "white", weight = 2, fillOpacity = 0.9, bringToFront = TRUE)
 highlight_Options2 <- highlightOptions(color = "white", weight = 2, bringToFront = TRUE)
-
 
 
 p <- leaflet() %>%
@@ -156,7 +136,7 @@ p <- leaflet() %>%
               color = "black",
               fillOpacity = 0.7,
               popup = popup1,
-              label = labels,
+              label = labels1,
               labelOptions = label_Options,
               highlightOptions = highlight_Options,
               group = "COVID19 % Positive") %>%
@@ -273,7 +253,33 @@ dat %>% # stacked bar chart
 ***
 The following is a stacked bar chart of the proportion of each of the SVI categories by County. This shows the same story as the scatter plot but in proportions . 
 
+### Stacked bar chart of the proportion of Child Opportunity categories 
 ```{r}
+dato <- merge_opp@data %>% 
+  select(countyfips, c5_COI_nat) %>% 
+  group_by(countyfips, c5_COI_nat) %>% 
+  summarize(n=n()) %>% 
+  cast(countyfips ~ c5_COI_nat)
+
+datn <- dato %>% # reshape for plotting
+  mutate(Counties = factor(countyfips)) %>% 
+  gather(variable, value, -Counties) %>% 
+  slice(6:n())
+
+datn %>% # stacked bar chart 
+  mutate(value=as.numeric(value)) %>% 
+  ggplot(aes(x = Counties,
+             y = value,
+             fill = forcats::fct_rev(variable))) +  
+    geom_bar(position = "fill",stat = "identity") +
+    scale_y_continuous(labels = scales::percent_format())
+```
+
+***
+The following is a stacked bar chart of the proportion of each of the child opportunity categories. Will need to adjust county fips to names
+
+
+```{r, eval=FALSE}
 svi_opp <- left_join(svi_tracts@data, merge_opp@data, by="GEOID")
 svi_opp %>% 
   select(cat, c5_COI_nat)  %>% 
