@@ -5,5 +5,5 @@ The aim of this project is to route public health efforts and mental health reso
 
 #### Contents :
  - "/R" folder contains all necessary r code and rds files
- - "load.R" is a script used to load and transform data and save as rds to "/rds_files" folder
+ - "load.R" is a script used to load/transform data and save as rds to "/rds_files" folder
  - "flexdashboard.Rmd" rmarkdown used to create the flexdashboard   
