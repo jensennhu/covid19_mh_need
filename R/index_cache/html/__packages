@@ -13,6 +13,7 @@ DescTools
 tigris
 sp
 htmlwidgets
+DT
 leaflet
 flexdashboard
 ggpubr

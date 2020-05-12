@@ -1,5 +1,5 @@
 ---
-title: "Assessment of Social Vulnerability and Child Opportunity before COVID19"
+title: "Assessment of Social Vulnerability and Child Opportunity in NYC in the context of COVID19"
 output: 
   flexdashboard::flex_dashboard:
     storyboard: true
@@ -14,7 +14,8 @@ library(tidyverse) # data manipulation
 library(DescTools) # data manipulation
 library(tigris) # geospatial data
 library(sp) # visualization
-library(htmlwidgets) # visualization
+library(htmlwidgets) # interactive widgets
+library(DT) # interactive table
 library(leaflet) # visualization
 library(ggplot2) # visualization
 library(flexdashboard) # visualization
@@ -27,10 +28,12 @@ nyc_zips <- readRDS(file = "rds_files/nyc_zips.rds")
 county_sp <- readRDS(file = "rds_files/county_sp.rds")
 svi_tracts <- readRDS(file = "rds_files/svi_tracts.rds")
 ds_svi <- readRDS(file = "rds_files/ds_svi.rds")
+svi_opp <- readRDS(file = "rds_files/svi_opp.rds")
+school_tracts <- readRDS(file = "rds_files/school_tracts.rds")
 ```
 
 
-### Interactive Leaflet Test of SVI, COI, COVID, and Geo boundaries
+### Interactive Leaflet of SVI, COI, COVID, and Geo boundaries in NYC
 
 ```{r, cache=TRUE}
 # Layer 1 - COVID by ZIP options
@@ -81,6 +84,7 @@ p <- leaflet() %>%
                    weight = 2,
                    radius = 2,
                    stroke = FALSE,
+                   color = "black",
                    fillOpacity = 1.0,
                    label = labels4,
                    popup = popup4,
@@ -98,7 +102,7 @@ p <- leaflet() %>%
   addPolygons(data = svi_tracts, # SVI by Census Tracts
               fillColor = ~pal2(cat), 
               color = "black", 
-              fillOpacity = 0.7, 
+              fillOpacity = 0.5, 
               weight = 1, 
               smoothFactor = 0.2,
               popup = popup2, 
@@ -107,7 +111,7 @@ p <- leaflet() %>%
   addPolygons(data = merge_opp, # Child Opportunity Index by Census Tracts
               fillColor = ~pal3(c5_COI_nat), 
               color = "#b2aeae", 
-              fillOpacity = 0.5, 
+              fillOpacity = 0.6, 
               weight = 1, 
               smoothFactor = 0.2,
               popup = popup3, 
@@ -115,16 +119,16 @@ p <- leaflet() %>%
               group = "Child Opportunity Index") %>%
   addPolygons(data = nyc_zips, # NYC Zip Codes
               weight =2,
-              color= "black",
+              color= "blue",
               fillOpacity = 0, 
               label = labels2,
               labelOptions = label_Options,
               highlightOptions = highlight_Options2,
               group = "zips") %>%
   addPolygons(data = county_sp, # NY County Boundaries
-              color = "black", 
+              color = "orange", 
               fillOpacity = 0, 
-              weight = 2, 
+              weight = 3, 
               label = labels3,
               labelOptions = label_Options,
               highlightOptions = highlight_Options2,
@@ -160,88 +164,54 @@ p
 ```
 
 ***
-This is a test display of an interactive leaflet in a flexdashboard. The leaflet contains NYC specific data on Social Vulnerability, Child Opportunity, and County/Census/Zip geographic boundaries.  
+This is an interactive leaflet containing NYC specific data on NYC public schools, Social Vulnerability, Child Opportunity, COVID19 and County/Census/Zip geographic boundaries.  
 
--  Positron, default, and Toner lite are different choices of basemap.   
--  COVID, SVI, and COI layers are best viewed one at a time. The overlay of these layers will need to be thought through.  
--  The zips layer can be used with the SVI and COI layers to get a sense of zip boundaries.    
--  The county layer can be used with any to get a sense of county boundaries.  
+-  Positron, google map, default, and Toner lite are different choices of basemap.   
+-  COVID, SVI, and COI layers are best viewed one at a time. The overlay of multiple layers will not correspond to any defined color legends.
+-  The zips or actually zctas, a census modified zip code, can be used with the SVI and COI layers to get a sense of "zip" boundaries.    
+-  The county layer can be used with any layer to get a sense of county boundaries.  
+-  NYC schools were added as a potential means of (1) identifying high MH need students, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs.
 
 
+### Census Tracts likely to be impacted by COVID19
 
-### Scatter plot of Social Vulnerability percentile ranks of each Census Tract by County
-
-```{r, echo=FALSE}
-ds_svi %>% 
-  ggplot(aes(x=LOCATION, y=RPL_THEMES)) + 
-  geom_point(alpha=0.5) +
-  facet_grid(~ COUNTY)
-
-```
-
-***
-The following is a scatter plot of Social Vulnerability by Census Tract by County. Alpha reduced to show overlap/density. From the clustering of points, we can see that majority of the census tracts within the Bronx County are ranked high in social vulnerability, tracts in Kings and Queens county show relatively the same story, but with a greater level of distribution in social vulnerability, tracts in New York and Richmond counties are relatively dispersed.
-
-### Stacked bar chart of the proportion of Social Vulnerability categories 
-```{r, echo=FALSE}
-datm <- ds_svi %>% # number of tracts in SVI cats by county
-  group_by(COUNTY, cat) %>% 
-  summarize(count=n()) %>% 
-  cast(COUNTY ~ cat) %>% # reshape for plotting
-  mutate(Counties = factor(COUNTY)) %>% 
-  gather(variable, value, -Counties) %>% 
-  slice(6:n())
-
-datm$variable <- ordered(datm$variable, levels = c("Lowest Vulnerability", "Low Medium Vulnerability", "High Medium Vulnerability", "Highest Vulnerability")) # order factor for plotting
-
-datm %>% # stacked bar chart 
-  mutate(value=as.numeric(value)) %>% 
-  ggplot(aes(x = Counties,
-             y = value,
-             fill = forcats::fct_rev(variable))) +  
-    geom_bar(position = "fill",stat = "identity") +
-    scale_y_continuous(labels = scales::percent_format())
-```
-
-***
-The following is a stacked bar chart of the proportion of each of the SVI categories by County. This shows the same story as the scatter plot but in proportions . 
-
-### Stacked bar chart of the proportion of Child Opportunity categories 
 ```{r}
-merge_opp@data %>% 
-  select(countyfips, c5_COI_nat) %>% 
-  group_by(countyfips, c5_COI_nat) %>% 
-  summarize(n=n()) %>% 
-  cast(countyfips ~ c5_COI_nat) %>% # reshape for plotting
-  mutate(Counties = factor(countyfips)) %>% 
-  gather(variable, value, -Counties) %>% 
-  slice(6:n()) %>%  
-  mutate(value=as.numeric(value)) %>% 
-  ggplot(aes(x = Counties,# stacked bar chart
-             y = value,
-             fill = forcats::fct_rev(variable))) +  
-    geom_bar(position = "fill",stat = "identity") +
-    scale_y_continuous(labels = scales::percent_format())
+# convert borough to cnty code 
+schools$STCNY[substr(schools$system_code, 3, 3) == "K"] <- "36047" # Kings
+schools$STCNY[substr(schools$system_code, 3, 3) == "X"] <- "36005" # Bronx
+schools$STCNY[substr(schools$system_code, 3, 3) == "Q"] <- "36081" # Queens
+schools$STCNY[substr(schools$system_code, 3, 3) == "M"] <- "36061" # New York
+schools$STCNY[substr(schools$system_code, 3, 3) == "R"] <- "36085" # Richmond
+
+# priority list of census tracts very low opportunity, highest vulnerability
+priority_list <- svi_opp %>% 
+  filter(c5_COI_nat == "Very Low" & cat == "Highest Vulnerability") %>% arrange(COUNTY)
+
+
+datatable(priority_list[c(1:6)], extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
 ```
 
 ***
-The following is a stacked bar chart of the proportion of each of the child opportunity categories. Will need to adjust county fips to names
+There are 486 census tracts in NYC identified as likely to be impacted by COVID19 based on high vulnerability and low child opportunity. This table can be output into CSV, Excel or PDF format.
 
-```{r, eval=FALSE}
-# merge svi and coi 
-svi_opp <- left_join(svi_tracts@data, merge_opp@data, by="GEOID")
-# assess svi and coi relationship
-svi_opp %>% 
-  select(cat, c5_COI_nat)  %>% 
-  count(cat, c5_COI_nat) %>% 
-  ggplot(aes(x = cat, y = c5_COI_nat)) + 
-  geom_point(alpha = 0.7, aes(size = n))
 
+### Neighborhoods matched w/open NYC public schools of regions likely to be impacted by COVID19
+```{r}
+# schools that matched priority list census tracts n = 313 schools
+priority_dbn <- left_join(priority_list, school_tracts, by = "GEOID")
+priority_dbn_table <- priority_dbn %>% 
+  group_by(nta_name) %>% 
+  summarize(system_code = paste(unique(system_code), collapse = ', '))
+  
+
+datatable(priority_dbn_table, extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
 ```
 
+***
+There are 313 NYC schools identified in the 124 relevant neighborhoods (identified through the 486 census tracts likely to be impacted by COVID19). As mentioned, schools were used here as a potential means of  (1) identifying high MH need students, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs. This table can be output into CSV, Excel or PDF format.
 
-```{r, eval=FALSE}
-# identify schools in high impact regions through census tract
+
+```{r, eval = FALSE}
 
 # convert borough to cnty code 
 schools$STCNY[substr(schools$system_code, 3, 3) == "K"] <- "36047" # Kings
@@ -264,7 +234,6 @@ schools %>% select(system_code, community_district, borough_block_lot, ctny_cnam
 svi_opp %>% group_by(ctny_cname) %>% filter(n()>1)
 
 #school_tracts <- left_join(schools, svi_opp, by)
-
 
 
 ```
