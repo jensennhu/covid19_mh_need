@@ -15,6 +15,8 @@ covid <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/
 schools <- read.socrata("https://data.cityofnewyork.us/resource/wg9x-4ke6.json")
 lcgms <- read_csv("../RawData/LCGMS_SchoolData_20200509_1135.csv")
 school_tracts <- read_csv("../RawData/school tract.csv")
+nta <- read.socrata("https://data.cityofnewyork.us/resource/93vf-i5bz.json")
+
 # tigris NYS county spatial data
 options(tigris_use_cache = TRUE)
 county_sp <- counties(state="NY")
