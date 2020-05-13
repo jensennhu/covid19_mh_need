@@ -6,6 +6,8 @@ library(tidyverse) # data manipulation
 library(DescTools) # data manipulation
 library(tigris) # geospatial data
 library(sp) # visualization
+library(xlsx) # input/output
+
 
 # Load data 
 ds_svi <- read_csv("../RawData/Social Vulnerability.csv", col_types=cols("FIPS"=col_character()))
@@ -16,7 +18,8 @@ schools <- read.socrata("https://data.cityofnewyork.us/resource/wg9x-4ke6.json")
 lcgms <- read_csv("../RawData/LCGMS_SchoolData_20200509_1135.csv")
 school_tracts <- read_csv("../RawData/school tract.csv")
 nta <- read.socrata("https://data.cityofnewyork.us/resource/93vf-i5bz.json")
-
+nta_tract <- read.xlsx("nyc2010census_tabulation_equiv", sheetName = "NTA to 2010 CT equivalency")
+nta_puma <- read.xlsx("nyc2010census_tabulation_equiv", sheetName = "NTA in PUMA_")
 # tigris NYS county spatial data
 options(tigris_use_cache = TRUE)
 county_sp <- counties(state="NY")
