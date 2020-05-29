@@ -17,3 +17,5 @@ DT
 leaflet
 flexdashboard
 ggpubr
+shiny
+sf

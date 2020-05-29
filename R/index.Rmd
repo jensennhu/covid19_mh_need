@@ -1,5 +1,6 @@
 ---
-title: "Assessment of Social Vulnerability and Child Opportunity in NYC in the context of COVID19"
+title: "Exploration of Social Vulnerability and Child Opportunity in NYC in the context of COVID19"
+author: "by Jensen Hu"
 output: 
   flexdashboard::flex_dashboard:
     storyboard: true
@@ -20,6 +21,7 @@ library(leaflet) # visualization
 library(ggplot2) # visualization
 library(flexdashboard) # visualization
 library(ggpubr) # visualization
+library(sf)
 
 schools <- readRDS(file = "rds_files/schools.rds")
 merge_opp <- readRDS(file = "rds_files/merge_opp.rds")
@@ -30,32 +32,33 @@ svi_tracts <- readRDS(file = "rds_files/svi_tracts.rds")
 ds_svi <- readRDS(file = "rds_files/ds_svi.rds")
 svi_opp <- readRDS(file = "rds_files/svi_opp.rds")
 school_tracts <- readRDS(file = "rds_files/school_tracts.rds")
+svi_nta_ranked <- readRDS(file = "rds_files/svi_nta_ranked.rds")
+coi_nta_shp <- readRDS(file = "rds_files/coi_nta_shp.rds")
 ```
 
 
-### Interactive Leaflet of SVI, COI, COVID, and Geo boundaries in NYC
+### Interactive Leaflet of Social Vulnerability, Child Opporunity, COVID19 Impact, and Geo boundaries in NYC
 
 ```{r, cache=TRUE}
 # Layer 1 - COVID by ZIP options
-popup1 <- paste0("Zip Code: ", nyc_covid$ZCTA5CE10, "<br>", "Percent Positive Cases: ", nyc_covid$zcta_cum.perc_pos)
-pal1 <- colorNumeric(palette = "YlGnBu", domain= nyc_covid$zcta_cum.perc_pos)
-# Layer 2 - SVI by Census Tract options
-popup2 <- paste0("GEOID: ", svi_tracts$GEOID, "<br>", "Social Vulnerability Index: ", svi_tracts$RPL_THEMES,"<br>", "COUNTY: ", svi_tracts$COUNTY)
-pal2 <- colorFactor(palette = "YlGnBu", domain = svi_tracts$cat)
-# Layer 3 - Child Opportunity Index
-popup3 <- paste0("GEOID: ", merge_opp$GEOID, "<br>", "Child Opportunity Level: ", merge_opp$c5_COI_nat,"<br>", "COUNTY: ", merge_opp$msaname15)
-pal3 <- colorFactor(palette = "YlGnBu", domain = merge_opp$c5_COI_nat, reverse = TRUE)
+popup1 <- paste0("Modified ZCTA: ", nyc_covid$MODZCTA, "<br>", "Level of COVID Impact: ", nyc_covid$impact_cat, "<br>", "Case Rate: ", nyc_covid$total_case_rate, "<br>", "Death Rate: ", nyc_covid$total_death_rate)
+pal1 <- colorFactor(palette = "YlGnBu", domain= nyc_covid$impact_cat)
+# Layer 2 - SVI by NTA
+popup2 <- paste0("NTA: ", svi_nta_ranked$ntaname, "<br>","svi: ", svi_nta_ranked$cat_nta)
+pal2 <- colorFactor(palette = "YlGnBu", domain = svi_nta_ranked$cat_nta)
+# Layer 3 - COI by NTA
+popup3 <- paste0("NTA: ", coi_nta_shp$ntaname, "<br>", "COI: ", coi_nta_shp$cat_coi_nta)
+pal3 <- colorFactor(palette = "YlGnBu", domain = coi_nta_shp$cat_coi_nta, reverse = TRUE)
 # Layer 4 - SMH Layer
 popup4 <- paste0("School Name: ", schools$location_name, "<br>","DBN: ", schools$system_code, "<br>","Address: ", schools$primary_address_line_1)
 
 # Label Text
 labels1 <- sprintf( # label for covid by zip code
-  "<strong>Zip code: %s</strong><br/> Perc. Positive: %g",
-  nyc_covid$ZCTA5CE10, nyc_covid$zcta_cum.perc_pos
-) %>% lapply(htmltools::HTML)
+  "<strong>Modified ZCTA: %s</strong><br/>Level of COVID Impact: %s</strong><br/>Case Rate: %s</strong><br/>Death Rate: %s",
+  nyc_covid$MODZCTA, nyc_covid$impact_cat, nyc_covid$total_case_rate, nyc_covid$total_death_rate) %>% lapply(htmltools::HTML)
 labels2 <- sprintf( # label for zip codes
   "<strong>Zip code: %s</strong>",
-  nyc_zips$ZCTA5CE10) %>% lapply(htmltools::HTML)
+  nyc_zips$MODZCTA) %>% lapply(htmltools::HTML)
 labels3 <- sprintf( # label for county names
   "<strong>County: %s</strong>",
   county_sp$NAME) %>% lapply(htmltools::HTML)
@@ -69,14 +72,11 @@ label_Options <- labelOptions(style = list("font-weight" = "normal", padding = "
 highlight_Options <- highlightOptions(color = "white", weight = 2, fillOpacity = 0.9, bringToFront = TRUE)
 highlight_Options2 <- highlightOptions(color = "white", weight = 2, bringToFront = TRUE)
 
-
 p <- leaflet() %>%
   # Base Groups 
   addProviderTiles("CartoDB.Positron", group = "Positron") %>%  
   addTiles(urlTemplate = "http://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga",
            attribution = 'Google', group = "Google Map") %>%
-  addTiles(group = "default") %>%  
-  addProviderTiles(providers$Stamen.TonerLite, group = "Toner Lite") %>%
   # Overlay Groups
     addCircleMarkers(data=schools, # school layer
                    lat = schools$latitude,
@@ -90,7 +90,7 @@ p <- leaflet() %>%
                    popup = popup4,
                    group = "NYC Schools") %>%
   addPolygons(data = nyc_covid,  # NYC ZIPS + COVID19 % Positive
-              fillColor = ~pal1(zcta_cum.perc_pos),
+              fillColor = ~pal1(nyc_covid$impact_cat),
               weight =2,
               color = "black",
               fillOpacity = 0.7,
@@ -98,25 +98,23 @@ p <- leaflet() %>%
               label = labels1,
               labelOptions = label_Options,
               highlightOptions = highlight_Options,
-              group = "COVID19 % Positive") %>%
-  addPolygons(data = svi_tracts, # SVI by Census Tracts
-              fillColor = ~pal2(cat), 
-              color = "black", 
-              fillOpacity = 0.5, 
-              weight = 1, 
-              smoothFactor = 0.2,
-              popup = popup2, 
-              highlightOptions = highlight_Options, 
-              group = "Social Vulnerability Index") %>%
-  addPolygons(data = merge_opp, # Child Opportunity Index by Census Tracts
-              fillColor = ~pal3(c5_COI_nat), 
-              color = "#b2aeae", 
-              fillOpacity = 0.6, 
-              weight = 1, 
-              smoothFactor = 0.2,
-              popup = popup3, 
+              group = "COVID19 Impact by MODZCTA") %>%
+  addPolygons(data = svi_nta_ranked, # SVI by NTA
+              fillColor = ~pal2(svi_nta_ranked$cat_nta),
+              weight =2,
+              color = "black",
+              fillOpacity = 0.6,
+              popup = popup2,
               highlightOptions = highlight_Options,
-              group = "Child Opportunity Index") %>%
+              group = "Social Vulnerability Index by NTA") %>% 
+  addPolygons(data = coi_nta_shp, # COI by NTA
+              fillColor = ~pal3(coi_nta_shp$cat_coi_nta),
+              weight =2,
+              color = "black",
+              fillOpacity = 0.7,
+              popup = popup3,
+              highlightOptions = highlight_Options,
+              group = "Child Opportunity Index by NTA") %>% 
   addPolygons(data = nyc_zips, # NYC Zip Codes
               weight =2,
               color= "blue",
@@ -124,7 +122,7 @@ p <- leaflet() %>%
               label = labels2,
               labelOptions = label_Options,
               highlightOptions = highlight_Options2,
-              group = "zips") %>%
+              group = "Zip Code") %>%
   addPolygons(data = county_sp, # NY County Boundaries
               color = "orange", 
               fillOpacity = 0, 
@@ -132,31 +130,29 @@ p <- leaflet() %>%
               label = labels3,
               labelOptions = label_Options,
               highlightOptions = highlight_Options2,
-              group = "county") %>%
-  setView(lng = "-73.935242", lat = "40.730610", zoom = 10) %>% 
+              group = "County") %>%
+  setView(lng = "-73.935242", lat = "40.730610", zoom = 10.3) %>% 
  # Layers control
   addLayersControl(
-    baseGroups = c("Positron","Google Map", "default", "Toner Lite"),
-    overlayGroups = c("NYC Schools", "COVID19 % Positive", "Social Vulnerability Index", "Child Opportunity Index", "zips", "county"),
+    baseGroups = c("Positron","Google Map"),
+    overlayGroups = c("COVID19 Impact by MODZCTA", "Social Vulnerability Index by NTA", "Child Opportunity Index by NTA", "NYC Schools", "Zip Code", "County"),
     options = layersControlOptions(collapsed = FALSE)
   )  %>%
   addLegend(pal = pal1, 
-            values = nyc_covid$zcta_cum.perc_pos, 
+            values = nyc_covid$impact_cat, 
             position = "bottomleft", 
-            title = "Percent Positive",
-            labFormat = labelFormat(suffix = "%"),
-            group = "COVID19 % Positive") %>% 
-  addLegend(pal = pal2, 
-            values = svi_tracts$cat, 
-            position = "bottomright", 
+            title = "Level of Impact",
+            group = "COVID19 Impact by MODZCTA") %>% 
+  addLegend(pal = pal2,
+            values = svi_nta_ranked$cat_nta,
+            position = "topleft",
             title = "Social Vulnerability Index",
-            group = "Social Vulnerability Index") %>%
-  addLegend(pal = pal3, 
-            values = merge_opp$c5_COI_nat, 
-            position = "topright", 
-            title = "Child Opp",
-            group = "Child Opportunity Index") %>%
-  hideGroup(c("COVID19 % Positive", "Child Opportunity Index", "zips", "county", "NYC Schools" ))
+            group = "Social Vulnerability Index by NTA") %>% 
+  addLegend(pal = pal3,
+            values = coi_nta_shp$cat_coi_nta,
+            title = "Child Opportunity Index",
+            group = "Child Opportunity Index by NTA") %>% 
+  hideGroup(c("COVID19 Impact by MODZCTA","NYC Schools", "Zip Code", "County", "Child Opportunity Index by NTA"))
 
 
 p
@@ -164,76 +160,66 @@ p
 ```
 
 ***
-This is an interactive leaflet containing NYC specific data on NYC public schools, Social Vulnerability, Child Opportunity, COVID19 and County/Census/Zip geographic boundaries.  
+This is an interactive leaflet containing NYC specific data on NYC public schools, Social Vulnerability, Child Opportunity, COVID19 and County/Zip geographic boundaries.  
 
--  Positron, google map, default, and Toner lite are different choices of basemap.   
--  COVID, SVI, and COI layers are best viewed one at a time. The overlay of multiple layers will not correspond to any defined color legends.
--  The zips or actually zctas, a census modified zip code, can be used with the SVI and COI layers to get a sense of "zip" boundaries.    
--  The county layer can be used with any layer to get a sense of county boundaries.  
--  NYC schools were added as a potential means of (1) identifying high MH need students, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs.
+-  Positron and Google Map are different choices of basemap.   
+-  COVID19 Impact, SVI by NTA, and COI by NTA layers are best viewed one at a time. The overlay of multiple layers will not correspond to any defined color legends.
+-  The Zip Codes or actually modified zip code tabulation areas, can be used with the SVI and COI layers to get a sense of "zip" boundaries.    
+-  The County layer can be used with any layer to get a sense of county boundaries.  
+-  NYC schools were added as a potential means of (1) identifying mental health need in children, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs.
 
-
-### Census Tracts likely to be impacted by COVID19
+### Modified Zip Code Tabulation Areas (MODZCTAs) currently impacted the highest by COVID19 alone
 
 ```{r}
-# convert borough to cnty code 
-schools$STCNY[substr(schools$system_code, 3, 3) == "K"] <- "36047" # Kings
-schools$STCNY[substr(schools$system_code, 3, 3) == "X"] <- "36005" # Bronx
-schools$STCNY[substr(schools$system_code, 3, 3) == "Q"] <- "36081" # Queens
-schools$STCNY[substr(schools$system_code, 3, 3) == "M"] <- "36061" # New York
-schools$STCNY[substr(schools$system_code, 3, 3) == "R"] <- "36085" # Richmond
+st_geometry(nyc_covid) <- NULL # remove geometry 
+highest_impact <- nyc_covid %>% 
+  filter(impact_cat == "Highest Impact") %>% 
+  select(MODZCTA, total_case_rate, total_death_rate, rank_impact) %>% 
+  arrange(desc(rank_impact))
 
-# priority list of census tracts very low opportunity, highest vulnerability
-priority_list <- svi_opp %>% 
-  filter(c5_COI_nat == "Very Low" & cat == "Highest Vulnerability") %>% arrange(COUNTY)
-
-
-datatable(priority_list[c(1:6)], extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
+datatable(highest_impact, extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
 ```
 
 ***
-There are 486 census tracts in NYC identified as likely to be impacted by COVID19 based on high vulnerability and low child opportunity. This table can be output into CSV, Excel or PDF format.
+There are 45 modified zip code tabulation areas currently impacted the highest by COVID19, based on case and death rate only. 
+
+
+### Neighborhood Tabulation Areas (NTAs) likely to be heavily impacted post-COVID19 based on SVI and COI
+
+```{r}
+# priority list of NTAs w/ very low opportunity, highest vulnerability
+priority_list <- svi_opp %>% 
+  filter(cat_nta == "Highest Vulnerability" & cat_coi_nta == "Very Low") %>% 
+  select(boro_name.x, ntacode, ntaname.x) %>% 
+  group_by(boro_name.x) %>% 
+  summarize(count = n(), Neighborhoods = paste(unique(ntaname.x), collapse = ', '))
+  
+datatable(priority_list, extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
+```
+
+***
+There are 34 neighborhoods in NYC identified as highest social vulnerability and very low child opportunity. These neighborhood are likely to be heavily impacted during and post COVID19.   
+
+-  Please note this does NOT factor in current COVID19 impact data as data by NTA is not publicly available (and crosswalk between MODZCTA and NTA is tricky).   
+-  This table can be output into CSV, Excel or PDF format.
 
 
 ### Neighborhoods matched w/open NYC public schools of regions likely to be impacted by COVID19
 ```{r}
-# schools that matched priority list census tracts n = 313 schools
-priority_dbn <- left_join(priority_list, school_tracts, by = "GEOID")
-priority_dbn_table <- priority_dbn %>% 
-  group_by(nta_name) %>% 
-  summarize(system_code = paste(unique(system_code), collapse = ', '))
-  
+priority_dbn <- svi_opp %>% 
+  filter(cat_nta == "Highest Vulnerability" & cat_coi_nta == "Very Low") %>% 
+  left_join(., schools, by = c("ntacode" = "nta")) %>% 
+  group_by(ntaname.x) %>% 
+  summarize(Schools = paste(unique(location_name), collapse = ', '))
 
-datatable(priority_dbn_table, extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
+datatable(priority_dbn, extensions = 'Buttons', options = list(dom = 'Bfrtip',buttons = list(extend = 'collection', buttons = c('csv', 'excel', 'pdf'), text = 'Download')))
 ```
 
 ***
-There are 313 NYC schools identified in the 124 relevant neighborhoods (identified through the 486 census tracts likely to be impacted by COVID19). As mentioned, schools were used here as a potential means of  (1) identifying high MH need students, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs. This table can be output into CSV, Excel or PDF format.
+There are 507 NYC schools identified in the 34 neighborhoods. As mentioned, schools were used here as a potential means of    
 
+(1) identifying mental health need in children,  
+(2) planning for resource distribution, and  
+(3) establishing a starting point in assessing the surrounding community needs.     
 
-```{r, eval = FALSE}
-
-# convert borough to cnty code 
-schools$STCNY[substr(schools$system_code, 3, 3) == "K"] <- "36047" # Kings
-schools$STCNY[substr(schools$system_code, 3, 3) == "X"] <- "36005" # Bronx
-schools$STCNY[substr(schools$system_code, 3, 3) == "Q"] <- "36081" # Queens
-schools$STCNY[substr(schools$system_code, 3, 3) == "M"] <- "36061" # New York
-schools$STCNY[substr(schools$system_code, 3, 3) == "R"] <- "36085" # Richmond
-
-# clean census tract var in schools
-schools$census_tract <- sub("[.]", "", schools$census_tract)
-
-# use str as sub for NA in corresponding census tract value
-svi_tracts$LOCATION <- str_replace_all(svi_tracts$LOCATION, fixed(" "), "")
-svi_opp$x <- substr(svi_tracts$LOCATION, 12, (StrPos(svi_tracts$LOCATION, ","))-1)
-svi_opp$NAME.y <- ifelse(is.na(svi_opp$NAME.y), svi_opp$x, svi_opp$NAME.y)
-svi_opp$NAME.y <- sub("[.]", "", svi_opp$NAME.y) # remove "." in svi_opp's abv tract
-
-schools %>% select(system_code, community_district, borough_block_lot, ctny_cname) %>% arrange(ctny_cname)
-
-svi_opp %>% group_by(ctny_cname) %>% filter(n()>1)
-
-#school_tracts <- left_join(schools, svi_opp, by)
-
-
-```
+This table can be output into CSV, Excel or PDF format.
