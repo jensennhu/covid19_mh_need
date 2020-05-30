@@ -1,5 +1,5 @@
 ---
-title: "Exploration of Social Vulnerability and Child Opportunity in NYC in the context of COVID19"
+title: "Exploration of Social Vulnerability and Child Opportunity in NYC in the context of COVID19 and Racial Injustice"
 author: "by Jensen Hu"
 output: 
   flexdashboard::flex_dashboard:
@@ -14,14 +14,14 @@ library(reshape) # data manipulation
 library(tidyverse) # data manipulation
 library(DescTools) # data manipulation
 library(tigris) # geospatial data
-library(sp) # visualization
+library(sf) # geo spatial
+library(sp) # geo spatial
 library(htmlwidgets) # interactive widgets
 library(DT) # interactive table
 library(leaflet) # visualization
 library(ggplot2) # visualization
 library(flexdashboard) # visualization
 library(ggpubr) # visualization
-library(sf)
 
 schools <- readRDS(file = "rds_files/schools.rds")
 merge_opp <- readRDS(file = "rds_files/merge_opp.rds")
@@ -168,7 +168,7 @@ This is an interactive leaflet containing NYC specific data on NYC public school
 -  The County layer can be used with any layer to get a sense of county boundaries.  
 -  NYC schools were added as a potential means of (1) identifying mental health need in children, (2) planning for resource distribution, and (3) establishing a starting point in assessing the surrounding community needs.
 
-### Modified Zip Code Tabulation Areas (MODZCTAs) currently impacted the highest by COVID19 alone
+### Modified Zip Code Tabulation Areas (MODZCTAs) with the highest COVID-19 impact (as of 5/29)
 
 ```{r}
 st_geometry(nyc_covid) <- NULL # remove geometry 
@@ -184,7 +184,7 @@ datatable(highest_impact, extensions = 'Buttons', options = list(dom = 'Bfrtip',
 There are 45 modified zip code tabulation areas currently impacted the highest by COVID19, based on case and death rate only. 
 
 
-### Neighborhood Tabulation Areas (NTAs) likely to be heavily impacted post-COVID19 based on SVI and COI
+### Neighborhood Tabulation Areas (NTAs) with the highest social vulnerability and lowest child opportunity in NYC
 
 ```{r}
 # priority list of NTAs w/ very low opportunity, highest vulnerability
@@ -198,13 +198,13 @@ datatable(priority_list, extensions = 'Buttons', options = list(dom = 'Bfrtip',b
 ```
 
 ***
-There are 34 neighborhoods in NYC identified as highest social vulnerability and very low child opportunity. These neighborhood are likely to be heavily impacted during and post COVID19.   
+There are 34 neighborhoods in NYC identified as "highest social vulnerability" and "very low child opportunity." These neighborhoods overlap with areas most impacted by COVID-19.   
 
 -  Please note this does NOT factor in current COVID19 impact data as data by NTA is not publicly available (and crosswalk between MODZCTA and NTA is tricky).   
 -  This table can be output into CSV, Excel or PDF format.
 
 
-### Neighborhoods matched w/open NYC public schools of regions likely to be impacted by COVID19
+### NYC Schools in neighborhoods with the highest vulnerability and lowest child opportunity
 ```{r}
 priority_dbn <- svi_opp %>% 
   filter(cat_nta == "Highest Vulnerability" & cat_coi_nta == "Very Low") %>% 
@@ -216,7 +216,7 @@ datatable(priority_dbn, extensions = 'Buttons', options = list(dom = 'Bfrtip',bu
 ```
 
 ***
-There are 507 NYC schools identified in the 34 neighborhoods. As mentioned, schools were used here as a potential means of    
+There are 507 NYC schools in the 34 identified neighborhoods. As mentioned, schools were used here as a potential means of    
 
 (1) identifying mental health need in children,  
 (2) planning for resource distribution, and  
